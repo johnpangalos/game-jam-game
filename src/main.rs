@@ -40,7 +40,11 @@ struct Board([Option<Basic>; 3]);
 #[derive(Component)]
 struct Hand([Option<Basic>; 10]);
 
-fn setup(mut commands: Commands) {
+const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
@@ -58,6 +62,97 @@ fn setup(mut commands: Commands) {
         .insert(Name("Computer".to_string()))
         .insert(Hitpoints(10))
         .insert(Board([Option::None; 3]));
+
+    commands
+        .spawn_bundle(ButtonBundle {
+            style: Style {
+                size: Size::new(Val::Px(150.0), Val::Px(65.0)),
+                margin: Rect::all(Val::Auto),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    bottom: Val::Px(10.0),
+                    right: Val::Px(10.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            color: NORMAL_BUTTON.into(),
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            parent.spawn_bundle(TextBundle {
+                text: Text::with_section(
+                    "End Round",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 28.0,
+                        color: Color::rgb(0.9, 0.9, 0.9),
+                    },
+                    Default::default(),
+                ),
+                ..Default::default()
+            });
+        });
+
+    commands
+        .spawn_bundle(TextBundle {
+            style: Style {
+                align_self: AlignSelf::FlexEnd,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    bottom: Val::Px(10.0),
+                    left: Val::Px(10.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+
+            text: Text::with_section(
+                format!("Your Health: 10"),
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 28.0,
+                    color: Color::WHITE,
+                },
+                TextAlignment {
+                    horizontal: HorizontalAlign::Center,
+                    ..Default::default()
+                },
+            ),
+            ..Default::default()
+        })
+        .insert(Player);
+
+    commands
+        .spawn_bundle(TextBundle {
+            style: Style {
+                align_self: AlignSelf::FlexEnd,
+                position_type: PositionType::Absolute,
+                position: Rect {
+                    top: Val::Px(10.0),
+                    left: Val::Px(10.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+
+            text: Text::with_section(
+                format!("My Health: "),
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 28.0,
+                    color: Color::WHITE,
+                },
+                TextAlignment {
+                    horizontal: HorizontalAlign::Center,
+                    ..Default::default()
+                },
+            ),
+            ..Default::default()
+        })
+        .insert(Computer);
 }
 
 fn run_cards(
@@ -65,7 +160,7 @@ fn run_cards(
     mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
     mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
 ) {
-    if !round.is_changed() {
+    if !round.is_changed() || round.0 == 0 {
         return;
     }
 
@@ -85,19 +180,47 @@ fn run_cards(
     }
 }
 
-fn display_health(round: Res<Round>, query: Query<(&Name, &Hitpoints)>) {
+fn update_health(
+    round: Res<Round>,
+    mut p_query: Query<(&Player, &mut Hitpoints, &Board), With<Player>>,
+    mut c_query: Query<(&Computer, &mut Hitpoints, &Board), With<Computer>>,
+    mut p_text_query: Query<&mut Text, With<Player>>,
+    mut c_text_query: Query<&mut Text, With<Computer>>,
+) {
     if !round.is_changed() {
         return;
     }
+    let (_, player_hitpoints, _) = p_query.single_mut();
+    let (_, computer_hitpoints, _) = c_query.single_mut();
 
-    for (Name(name), Hitpoints(hitpoints)) in query.iter() {
-        println!("{:?}: {:?}", name, hitpoints)
+    for mut text in p_text_query.iter_mut() {
+        text.sections[1].value = format!("{:?}", player_hitpoints.0);
+    }
+    for mut text in c_text_query.iter_mut() {
+        text.sections[1].value = format!("{:?}", computer_hitpoints.0);
     }
 }
 
-fn keyboard_input(keys: Res<Input<KeyCode>>, mut round: ResMut<Round>) {
-    if keys.just_pressed(KeyCode::Space) {
-        round.0 = round.0 + 1;
+fn button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut UiColor, &Children),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut round: ResMut<Round>,
+) {
+    for (interaction, mut color, _children) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Clicked => {
+                *color = PRESSED_BUTTON.into();
+                round.0 = round.0 + 1;
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+            }
+        }
     }
 }
 
@@ -113,14 +236,14 @@ fn main() {
     App::new()
         .insert_resource(Round(0))
         .add_plugins(DefaultPlugins)
-        .add_plugin(DevelopmentPlugin)
+        // .add_plugin(DevelopmentPlugin)
         .add_startup_system(setup)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(run_if_round_changed)
                 .with_system(run_cards.label("run_cards"))
-                .with_system(display_health.after("run_cards")),
+                .with_system(update_health.after("run_cards")),
         )
-        .add_system(keyboard_input)
+        .add_system(button_system)
         .run();
 }
