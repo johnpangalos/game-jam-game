@@ -40,6 +40,12 @@ struct Board([Option<Basic>; 3]);
 #[derive(Component)]
 struct Hand([Option<Basic>; 10]);
 
+#[derive(Component)]
+struct HealthTextComputer(String);
+
+#[derive(Component)]
+struct HealthTextPlayer(String);
+
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
 const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
@@ -182,10 +188,10 @@ fn run_cards(
 
 fn update_health(
     round: Res<Round>,
-    mut p_query: Query<(&Player, &mut Hitpoints, &Board), With<Player>>,
-    mut c_query: Query<(&Computer, &mut Hitpoints, &Board), With<Computer>>,
-    mut p_text_query: Query<&mut Text, With<Player>>,
-    mut c_text_query: Query<&mut Text, With<Computer>>,
+    mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
+    mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
+    mut p_text_query: Query<(&Player, &mut Text), (With<Player>, Without<Computer>)>,
+    mut c_text_query: Query<(&Computer, &mut Text), (With<Computer>, Without<Player>)>,
 ) {
     if !round.is_changed() {
         return;
@@ -193,12 +199,11 @@ fn update_health(
     let (_, player_hitpoints, _) = p_query.single_mut();
     let (_, computer_hitpoints, _) = c_query.single_mut();
 
-    for mut text in p_text_query.iter_mut() {
-        text.sections[1].value = format!("{:?}", player_hitpoints.0);
-    }
-    for mut text in c_text_query.iter_mut() {
-        text.sections[1].value = format!("{:?}", computer_hitpoints.0);
-    }
+    let (_, mut p_text) = p_text_query.single_mut();
+    p_text.sections[0].value = format!("Your Health: {:?}", player_hitpoints.0);
+
+    let (_, mut c_text) = c_text_query.single_mut();
+    c_text.sections[0].value = format!("My Health: {:?}", computer_hitpoints.0);
 }
 
 fn button_system(
@@ -236,7 +241,7 @@ fn main() {
     App::new()
         .insert_resource(Round(0))
         .add_plugins(DefaultPlugins)
-        // .add_plugin(DevelopmentPlugin)
+        .add_plugin(DevelopmentPlugin)
         .add_startup_system(setup)
         .add_system_set(
             SystemSet::new()
