@@ -1,7 +1,7 @@
-use bevy::{
-    diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
-    prelude::*,
-};
+use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use development::DevelopmentPlugin;
+
+mod development;
 
 trait Card {
     fn strength(&self) -> i32;
@@ -20,8 +20,7 @@ impl Card for Basic {
     }
 }
 
-#[derive(Component)]
-struct FpsText;
+struct Round(usize);
 
 #[derive(Component)]
 struct Player;
@@ -41,7 +40,7 @@ struct Board([Option<Basic>; 3]);
 #[derive(Component)]
 struct Hand([Option<Basic>; 10]);
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
@@ -59,43 +58,17 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(Name("Computer".to_string()))
         .insert(Hitpoints(10))
         .insert(Board([Option::None; 3]));
-
-    commands
-        .spawn_bundle(TextBundle {
-            style: Style {
-                align_self: AlignSelf::FlexEnd,
-                ..Default::default()
-            },
-            text: Text {
-                sections: vec![
-                    TextSection {
-                        value: "FPS: ".to_string(),
-                        style: TextStyle {
-                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                            font_size: 60.0,
-                            color: Color::WHITE,
-                        },
-                    },
-                    TextSection {
-                        value: "".to_string(),
-                        style: TextStyle {
-                            font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-                            font_size: 60.0,
-                            color: Color::GOLD,
-                        },
-                    },
-                ],
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(FpsText);
 }
 
 fn run_cards(
+    round: Res<Round>,
     mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
     mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
 ) {
+    if !round.is_changed() {
+        return;
+    }
+
     let (_, mut player_hitpoints, Board(player)) = p_query.single_mut();
     let (_, mut computer_hitpoints, Board(computer)) = c_query.single_mut();
 
@@ -112,29 +85,42 @@ fn run_cards(
     }
 }
 
-fn display_health(query: Query<(&Name, &Hitpoints)>) {
+fn display_health(round: Res<Round>, query: Query<(&Name, &Hitpoints)>) {
+    if !round.is_changed() {
+        return;
+    }
+
     for (Name(name), Hitpoints(hitpoints)) in query.iter() {
         println!("{:?}: {:?}", name, hitpoints)
     }
 }
 
-fn text_update_system(diagnostics: Res<Diagnostics>, mut query: Query<&mut Text, With<FpsText>>) {
-    for mut text in query.iter_mut() {
-        if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(average) = fps.average() {
-                text.sections[1].value = format!("{:.2}", average);
-            }
-        }
+fn keyboard_input(keys: Res<Input<KeyCode>>, mut round: ResMut<Round>) {
+    if keys.just_pressed(KeyCode::Space) {
+        round.0 = round.0 + 1;
+    }
+}
+
+fn run_if_round_changed(round: Res<Round>) -> ShouldRun {
+    if round.is_changed() {
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
     }
 }
 
 fn main() {
     App::new()
+        .insert_resource(Round(0))
         .add_plugins(DefaultPlugins)
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(DevelopmentPlugin)
         .add_startup_system(setup)
-        .add_system(text_update_system)
-        .add_system(run_cards.label("run_cards"))
-        .add_system(display_health.after("run_cards"))
+        .add_system_set(
+            SystemSet::new()
+                .with_run_criteria(run_if_round_changed)
+                .with_system(run_cards.label("run_cards"))
+                .with_system(display_health.after("run_cards")),
+        )
+        .add_system(keyboard_input)
         .run();
 }
