@@ -56,13 +56,16 @@ fn run_cards(
     mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
     mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
 ) {
-    let (_, _, Board(player)) = p_query.single_mut();
+    let (_, mut player_hitpoints, Board(player)) = p_query.single_mut();
     let (_, mut computer_hitpoints, Board(computer)) = c_query.single_mut();
 
     for column in player.iter().zip(computer.iter()) {
         match column {
             (Option::Some(p), Option::None) => {
                 computer_hitpoints.0 = computer_hitpoints.0 - p.strength()
+            }
+            (Option::None, Option::Some(c)) => {
+                player_hitpoints.0 = player_hitpoints.0 - c.strength()
             }
             _ => {}
         }
