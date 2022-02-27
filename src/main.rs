@@ -186,12 +186,14 @@ fn press_end_round_system(
         (Changed<Interaction>, With<EndRoundButton>),
     >,
     mut round: ResMut<Round>,
-    mut app_state: ResMut<State<PlayerState>>,
+    mut player_state: ResMut<State<PlayerState>>,
 ) {
     for (interaction, _children) in interaction_query.iter_mut() {
         if let Interaction::Clicked = *interaction {
             round.0 = round.0 + 1;
-            app_state.set(PlayerState::Draw).expect("This should work");
+            player_state
+                .set(PlayerState::Draw)
+                .expect("This should work");
             return;
         }
     }
@@ -203,7 +205,7 @@ fn press_draw_card_system(
         (Changed<Interaction>, With<DrawCardButton>),
     >,
     mut query: Query<(&mut Deck, &mut Hand), With<Player>>,
-    mut app_state: ResMut<State<PlayerState>>,
+    mut player_state: ResMut<State<PlayerState>>,
 ) {
     let (mut deck, mut hand) = query.single_mut();
     for (interaction, _children) in interaction_query.iter_mut() {
@@ -215,7 +217,9 @@ fn press_draw_card_system(
 
             if deck.draws <= 0 {
                 deck.draws = 1;
-                app_state.set(PlayerState::Play).expect("This should work");
+                player_state
+                    .set(PlayerState::Play)
+                    .expect("This should work");
                 return;
             }
         }
@@ -233,11 +237,11 @@ fn update_health<T: Component>(
 
 fn update_player_state(
     mut text_query: Query<&mut Text, With<PlayerStateText>>,
-    app_state: Res<State<PlayerState>>,
+    player_state: Res<State<PlayerState>>,
 ) {
     let mut text = text_query.single_mut();
 
-    text.sections[1].value = format!("{:?}", app_state.current())
+    text.sections[1].value = format!("{:?}", player_state.current())
 }
 
 fn main() {
