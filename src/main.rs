@@ -114,19 +114,27 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
                 ..Default::default()
             },
-
-            text: Text::with_section(
-                format!("Your Health: 10"),
-                TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 28.0,
-                    color: Color::WHITE,
-                },
-                TextAlignment {
-                    horizontal: HorizontalAlign::Center,
-                    ..Default::default()
-                },
-            ),
+            text: Text {
+                sections: vec![
+                    TextSection {
+                        value: "Your Health: ".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font_size: 28.0,
+                            ..Default::default()
+                        },
+                    },
+                    TextSection {
+                        value: "10".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                            font_size: 28.0,
+                            ..Default::default()
+                        },
+                    },
+                ],
+                ..Default::default()
+            },
             ..Default::default()
         })
         .insert(Player);
@@ -143,19 +151,28 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
                 ..Default::default()
             },
+            text: Text {
+                sections: vec![
+                    TextSection {
+                        value: "My Health: ".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font_size: 28.0,
+                            ..Default::default()
+                        },
+                    },
+                    TextSection {
+                        value: "10".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                            font_size: 28.0,
+                            ..Default::default()
+                        },
+                    },
+                ],
+                ..Default::default()
+            },
 
-            text: Text::with_section(
-                format!("My Health: "),
-                TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 28.0,
-                    color: Color::WHITE,
-                },
-                TextAlignment {
-                    horizontal: HorizontalAlign::Center,
-                    ..Default::default()
-                },
-            ),
             ..Default::default()
         })
         .insert(Computer);
@@ -186,24 +203,13 @@ fn run_cards(
     }
 }
 
-fn update_health(
-    round: Res<Round>,
-    mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
-    mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
-    mut p_text_query: Query<(&Player, &mut Text), (With<Player>, Without<Computer>)>,
-    mut c_text_query: Query<(&Computer, &mut Text), (With<Computer>, Without<Player>)>,
+fn update_health<T: Component>(
+    query: Query<&Hitpoints, With<T>>,
+    mut text_query: Query<&mut Text, With<T>>,
 ) {
-    if !round.is_changed() {
-        return;
-    }
-    let (_, player_hitpoints, _) = p_query.single_mut();
-    let (_, computer_hitpoints, _) = c_query.single_mut();
-
-    let (_, mut p_text) = p_text_query.single_mut();
-    p_text.sections[0].value = format!("Your Health: {:?}", player_hitpoints.0);
-
-    let (_, mut c_text) = c_text_query.single_mut();
-    c_text.sections[0].value = format!("My Health: {:?}", computer_hitpoints.0);
+    let Hitpoints(hitpoints) = query.single();
+    let mut text = text_query.single_mut();
+    text.sections[1].value = format!("{:?}", hitpoints);
 }
 
 fn button_system(
@@ -247,7 +253,8 @@ fn main() {
             SystemSet::new()
                 .with_run_criteria(run_if_round_changed)
                 .with_system(run_cards.label("run_cards"))
-                .with_system(update_health.after("run_cards")),
+                .with_system(update_health::<Player>.after("run_cards"))
+                .with_system(update_health::<Computer>.after("run_cards")),
         )
         .add_system(button_system)
         .run();
