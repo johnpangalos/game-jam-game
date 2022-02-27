@@ -2,7 +2,6 @@ use bevy::{
     diagnostic::{Diagnostics, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
-
 pub struct DevelopmentPlugin;
 
 #[derive(Component)]
