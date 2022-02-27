@@ -183,7 +183,7 @@ fn run_cards(
     mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
     mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
 ) {
-    if !round.is_changed() || round.0 == 0 {
+    if round.0 == 0 {
         return;
     }
 
