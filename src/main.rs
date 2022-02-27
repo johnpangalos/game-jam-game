@@ -1,7 +1,7 @@
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
-use development::DevelopmentPlugin;
+use dev::DevelopmentPlugin;
 
-mod development;
+mod dev;
 
 trait Card {
     fn strength(&self) -> i32;
