@@ -54,6 +54,11 @@ struct Deck {
 }
 
 #[derive(Component)]
+struct HandCard {
+    card: Basic,
+}
+
+#[derive(Component)]
 struct PlayerStateText;
 
 #[derive(Component)]
@@ -198,8 +203,8 @@ fn press_end_round_system(
         }
     }
 }
-
 fn press_draw_card_system(
+    mut commands: Commands,
     mut interaction_query: Query<
         (&Interaction, &Children),
         (Changed<Interaction>, With<DrawCardButton>),
@@ -211,6 +216,25 @@ fn press_draw_card_system(
     for (interaction, _children) in interaction_query.iter_mut() {
         if let Interaction::Clicked = *interaction {
             if let Option::Some(card) = deck.cards.pop() {
+                commands
+                    .spawn_bundle(SpriteBundle {
+                        transform: Transform {
+                            translation: Vec3::new(
+                                -550.0 + 150.0 * hand.0.len() as f32,
+                                -215.0,
+                                0.0,
+                            ),
+                            scale: Vec3::new(120.0, 180.0, 0.0),
+                            ..Default::default()
+                        },
+                        sprite: Sprite {
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    })
+                    .insert(HandCard {
+                        card: Basic::Rat(1),
+                    });
                 hand.0.push(card);
                 deck.draws = deck.draws - 1;
             }
