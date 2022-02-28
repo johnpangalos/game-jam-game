@@ -54,9 +54,7 @@ struct Deck {
 }
 
 #[derive(Component)]
-struct HandCard {
-    card: Basic,
-}
+struct HandCard {}
 
 #[derive(Component)]
 struct PlayerStateText;
@@ -203,6 +201,22 @@ fn press_end_round_system(
         }
     }
 }
+
+fn gen_card(position: Rect<Val>) -> NodeBundle {
+    NodeBundle {
+        style: Style {
+            size: Size::new(Val::Px(150.0), Val::Px(200.0)),
+            margin: Rect::all(Val::Auto),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            position_type: PositionType::Absolute,
+            position,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn press_draw_card_system(
     mut commands: Commands,
     mut interaction_query: Query<
@@ -217,24 +231,12 @@ fn press_draw_card_system(
         if let Interaction::Clicked = *interaction {
             if let Option::Some(card) = deck.cards.pop() {
                 commands
-                    .spawn_bundle(SpriteBundle {
-                        transform: Transform {
-                            translation: Vec3::new(
-                                -550.0 + 150.0 * hand.0.len() as f32,
-                                -215.0,
-                                0.0,
-                            ),
-                            scale: Vec3::new(120.0, 180.0, 0.0),
-                            ..Default::default()
-                        },
-                        sprite: Sprite {
-                            ..Default::default()
-                        },
+                    .spawn_bundle(gen_card(Rect {
+                        bottom: Val::Px(50.0),
+                        left: Val::Px(15.0 + 165.0 * hand.0.len() as f32),
                         ..Default::default()
-                    })
-                    .insert(HandCard {
-                        card: Basic::Rat(1),
-                    });
+                    }))
+                    .insert(HandCard {});
                 hand.0.push(card);
                 deck.draws = deck.draws - 1;
             }
