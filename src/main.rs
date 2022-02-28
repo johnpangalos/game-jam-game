@@ -10,22 +10,6 @@ enum PlayerState {
 
 mod dev;
 mod ui;
-trait Card {
-    fn strength(&self) -> i32;
-}
-
-#[derive(Clone, Copy)]
-enum Basic {
-    Rat(i32),
-}
-
-impl Card for Basic {
-    fn strength(&self) -> i32 {
-        match self {
-            Basic::Rat(s) => s.clone(),
-        }
-    }
-}
 
 struct Round(usize);
 
@@ -39,18 +23,24 @@ struct Computer;
 struct Name(String);
 
 #[derive(Component)]
+struct Card {
+    name: String,
+    strength: i32,
+}
+
+#[derive(Component)]
 struct Hitpoints(i32);
 
 #[derive(Component)]
-struct Board([Option<Basic>; 3]);
+struct Board([Option<Entity>; 3]);
 
 #[derive(Component)]
-struct Hand(Vec<Basic>);
+struct Hand(Vec<Entity>);
 
 #[derive(Component)]
 struct Deck {
     draws: i32,
-    cards: Vec<Basic>,
+    cards: Vec<Entity>,
 }
 
 #[derive(Component)]
@@ -62,31 +52,55 @@ struct EndRoundButton;
 #[derive(Component)]
 struct DrawCardButton;
 
+#[derive(Bundle)]
+struct CardBundle {
+    card: Card,
+
+    #[bundle]
+    sprite: SpriteBundle,
+}
+
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let bold = asset_server.load("fonts/FiraSans-Bold.ttf");
     let medium = asset_server.load("fonts/FiraMono-Medium.ttf");
+    let card_back = asset_server.load("textures/card_back.png");
+    // let card_front = asset_server.load("/textures/card_back.png");
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
-    commands
-        .spawn()
-        .insert(Player)
-        .insert(Name("Player".to_string()))
-        .insert(Hitpoints(10))
-        .insert(Hand(vec![]))
-        .insert(Board([Option::Some(Basic::Rat(1)); 3]))
-        .insert(Deck {
-            draws: 1,
-            cards: vec![Basic::Rat(1); 60],
-        });
+    let mut cards = vec![];
+    for _ in 0..60 {
+        let id = commands
+            .spawn_bundle(SpriteBundle {
+                sprite: Sprite {
+                    color: Color::BLACK,
+                    ..Default::default()
+                },
+                transform: Transform::from_xyz(0.0, -215.0, 0.0),
+                texture: card_back.clone(),
+                ..Default::default()
+            })
+            .id();
 
-    commands
-        .spawn()
-        .insert(Computer)
-        .insert(Name("Computer".to_string()))
-        .insert(Hitpoints(10))
-        .insert(Board([Option::None; 3]));
+        cards.push(id);
+    }
+
+    commands.spawn_bundle((
+        Player,
+        Name("Player".to_string()),
+        Hitpoints(10),
+        Hand(vec![]),
+        Board([Option::None; 3]),
+        Deck { draws: 1, cards },
+    ));
+
+    commands.spawn_bundle((
+        Computer,
+        Name("Computer".to_string()),
+        Hitpoints(10),
+        Board([Option::None; 3]),
+    ));
 
     commands
         .spawn_bundle(button(Rect {
@@ -155,25 +169,37 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(PlayerStateText);
 }
 
+// fn draw_cards(
+//     query: Query<&Deck, With<Player>>,
+//     sprites_query: Query<&Sprite>,
+//     asset_server: Res<AssetServer>,
+// ) {
+//     let deck = query.single();
+//     let sprites = sprites_query.iter().collect::<Vec<&Sprite>>();
+// }
+
 fn run_cards(
     round: Res<Round>,
-    mut p_query: Query<(&Player, &mut Hitpoints, &Board), Without<Computer>>,
-    mut c_query: Query<(&Computer, &mut Hitpoints, &Board), Without<Player>>,
+    mut p_query: Query<(&mut Hitpoints, &Board), (With<Player>, Without<Computer>)>,
+    mut c_query: Query<(&mut Hitpoints, &Board), (With<Computer>, Without<Player>)>,
+    cards_query: Query<&Card>,
 ) {
     if round.0 == 0 {
         return;
     }
 
-    let (_, mut player_hitpoints, Board(player)) = p_query.single_mut();
-    let (_, mut computer_hitpoints, Board(computer)) = c_query.single_mut();
+    let (mut player_hitpoints, Board(player)) = p_query.single_mut();
+    let (mut computer_hitpoints, Board(computer)) = c_query.single_mut();
 
     for column in player.iter().zip(computer.iter()) {
         match column {
             (Option::Some(p), Option::None) => {
-                computer_hitpoints.0 = computer_hitpoints.0 - p.strength()
+                let card = cards_query.get(*p).expect("Should exist");
+                computer_hitpoints.0 = computer_hitpoints.0 - card.strength
             }
             (Option::None, Option::Some(c)) => {
-                player_hitpoints.0 = player_hitpoints.0 - c.strength()
+                let card = cards_query.get(*c).expect("Should exist");
+                player_hitpoints.0 = player_hitpoints.0 - card.strength;
             }
             _ => {}
         }
