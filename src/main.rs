@@ -44,6 +44,9 @@ struct Deck {
 }
 
 #[derive(Component)]
+struct HandCard {}
+
+#[derive(Component)]
 struct PlayerStateText;
 
 #[derive(Component)]
@@ -225,7 +228,23 @@ fn press_end_round_system(
     }
 }
 
+fn gen_card(position: Rect<Val>) -> NodeBundle {
+    NodeBundle {
+        style: Style {
+            size: Size::new(Val::Px(150.0), Val::Px(200.0)),
+            margin: Rect::all(Val::Auto),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            position_type: PositionType::Absolute,
+            position,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn press_draw_card_system(
+    mut commands: Commands,
     mut interaction_query: Query<
         (&Interaction, &Children),
         (Changed<Interaction>, With<DrawCardButton>),
@@ -237,6 +256,13 @@ fn press_draw_card_system(
     for (interaction, _children) in interaction_query.iter_mut() {
         if let Interaction::Clicked = *interaction {
             if let Option::Some(card) = deck.cards.pop() {
+                commands
+                    .spawn_bundle(gen_card(Rect {
+                        bottom: Val::Px(50.0),
+                        left: Val::Px(15.0 + 165.0 * hand.0.len() as f32),
+                        ..Default::default()
+                    }))
+                    .insert(HandCard {});
                 hand.0.push(card);
                 deck.draws = deck.draws - 1;
             }
