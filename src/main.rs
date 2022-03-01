@@ -1,4 +1,9 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use bevy_tweening::{
+    lens::UiPositionLens, Animator, EaseFunction, Tween, TweeningPlugin, TweeningType,
+};
 use dev::DevelopmentPlugin;
 use ui::{button, button_text, description, CustomUiPlugin, DescriptionOptions};
 
@@ -66,23 +71,19 @@ struct CardBundle {
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let bold = asset_server.load("fonts/FiraSans-Bold.ttf");
     let medium = asset_server.load("fonts/FiraMono-Medium.ttf");
-    let card_back = asset_server.load("textures/card_back.png");
+    // let card_back = asset_server.load("textures/card_back.png");
     // let card_front = asset_server.load("/textures/card_back.png");
 
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
 
     let mut cards = vec![];
+
     for _ in 0..60 {
         let id = commands
-            .spawn_bundle(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::BLACK,
-                    ..Default::default()
-                },
-                transform: Transform::from_xyz(0.0, -215.0, 0.0),
-                texture: card_back.clone(),
-                ..Default::default()
+            .spawn()
+            .insert(Card {
+                name: "Rat".to_string(),
+                strength: 1,
             })
             .id();
 
@@ -172,15 +173,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(PlayerStateText);
 }
 
-// fn draw_cards(
-//     query: Query<&Deck, With<Player>>,
-//     sprites_query: Query<&Sprite>,
-//     asset_server: Res<AssetServer>,
-// ) {
-//     let deck = query.single();
-//     let sprites = sprites_query.iter().collect::<Vec<&Sprite>>();
-// }
-
 fn run_cards(
     round: Res<Round>,
     mut p_query: Query<(&mut Hitpoints, &Board), (With<Player>, Without<Computer>)>,
@@ -196,12 +188,12 @@ fn run_cards(
 
     for column in player.iter().zip(computer.iter()) {
         match column {
-            (Option::Some(p), Option::None) => {
-                let card = cards_query.get(*p).expect("Should exist");
+            (Option::Some(e), Option::None) => {
+                let card = cards_query.get(*e).expect("Should exist");
                 computer_hitpoints.0 = computer_hitpoints.0 - card.strength
             }
-            (Option::None, Option::Some(c)) => {
-                let card = cards_query.get(*c).expect("Should exist");
+            (Option::None, Option::Some(e)) => {
+                let card = cards_query.get(*e).expect("Should exist");
                 player_hitpoints.0 = player_hitpoints.0 - card.strength;
             }
             _ => {}
@@ -228,42 +220,71 @@ fn press_end_round_system(
     }
 }
 
-fn gen_card(position: Rect<Val>) -> NodeBundle {
-    NodeBundle {
-        style: Style {
-            size: Size::new(Val::Px(150.0), Val::Px(200.0)),
-            margin: Rect::all(Val::Auto),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            position_type: PositionType::Absolute,
-            position,
-            ..Default::default()
-        },
-        ..Default::default()
+fn update_hand_positions(
+    mut commands: Commands,
+    query: Query<&Hand, (Changed<Hand>, With<Player>)>,
+    style_query: Query<&Style>,
+) {
+    if query.is_empty() {
+        return;
+    }
+
+    let Hand(hand) = query.single();
+
+    let gap = 2.0;
+    let offset = hand.len() as f32 / 2.0 * gap;
+
+    for (i, e) in hand.iter().enumerate() {
+        let style = style_query.get(*e).expect("Should exist");
+        commands.entity(*e).insert(Animator::new(Tween::new(
+            EaseFunction::QuinticInOut,
+            TweeningType::Once,
+            Duration::from_secs(1),
+            UiPositionLens {
+                start: style.position,
+                end: Rect {
+                    right: Val::Percent(50.0 + i as f32 * gap - offset),
+                    bottom: Val::Percent(5.0),
+                    ..Default::default()
+                },
+            },
+        )));
     }
 }
 
 fn press_draw_card_system(
     mut commands: Commands,
     mut interaction_query: Query<
-        (&Interaction, &Children),
-        (Changed<Interaction>, With<DrawCardButton>),
+        &Interaction,
+        (Changed<Interaction>, With<Children>, With<DrawCardButton>),
     >,
-    mut query: Query<(&mut Deck, &mut Hand), With<Player>>,
+    mut query: Query<(&mut Deck, &Hand, Entity), With<Player>>,
     mut player_state: ResMut<State<PlayerState>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let (mut deck, mut hand) = query.single_mut();
-    for (interaction, _children) in interaction_query.iter_mut() {
+    let (mut deck, hand, e) = query.single_mut();
+    for interaction in interaction_query.iter_mut() {
         if let Interaction::Clicked = *interaction {
             if let Option::Some(card) = deck.cards.pop() {
-                commands
-                    .spawn_bundle(gen_card(Rect {
-                        bottom: Val::Px(50.0),
-                        left: Val::Px(15.0 + 165.0 * hand.0.len() as f32),
+                let rat = asset_server.load("textures/rat.png");
+                commands.entity(card).insert_bundle(ImageBundle {
+                    image: UiImage(rat),
+                    style: Style {
+                        size: Size::new(Val::Px(150.0), Val::Px(200.0)),
+                        position: Rect {
+                            right: Val::Percent(5.0),
+                            bottom: Val::Percent(5.0),
+                            ..Default::default()
+                        },
+                        position_type: PositionType::Absolute,
                         ..Default::default()
-                    }))
-                    .insert(HandCard {});
-                hand.0.push(card);
+                    },
+                    ..Default::default()
+                });
+                let mut next = hand.0.clone();
+                next.push(card);
+                commands.entity(e).insert(Hand(next));
+
                 deck.draws = deck.draws - 1;
             }
 
@@ -301,10 +322,12 @@ fn main() {
         .insert_resource(Round(0))
         .add_state(PlayerState::Draw)
         .add_plugins(DefaultPlugins)
+        .add_plugin(TweeningPlugin)
         .add_plugin(DevelopmentPlugin)
         .add_plugin(CustomUiPlugin)
         .add_startup_system(setup)
         .add_system(update_player_state)
+        .add_system(update_hand_positions)
         .add_system_set(SystemSet::on_update(PlayerState::Draw).with_system(press_draw_card_system))
         .add_system_set(SystemSet::on_update(PlayerState::Play).with_system(press_end_round_system))
         .add_system_set(

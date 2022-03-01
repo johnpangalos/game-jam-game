@@ -7,6 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 bevy = "0.6.1" # make sure this is the latest version
+bevy_tweening = "0.3.2"
 
 [profile.dev]
 opt-level = 1
