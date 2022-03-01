@@ -222,9 +222,13 @@ fn press_end_round_system(
 
 fn update_hand_positions(
     mut commands: Commands,
+    query: Query<&Hand, (Changed<Hand>, With<Player>)>,
     style_query: Query<&Style>,
-    query: Query<&Hand, With<Player>>,
 ) {
+    if query.is_empty() {
+        return;
+    }
+
     let Hand(hand) = query.single();
 
     let gap = 2.0;
@@ -232,6 +236,7 @@ fn update_hand_positions(
 
     for (i, e) in hand.iter().enumerate() {
         let style = style_query.get(*e).expect("Style should exist");
+
         commands.entity(*e).insert(Animator::new(Tween::new(
             EaseFunction::QuinticInOut,
             TweeningType::Once,
@@ -262,11 +267,11 @@ fn run_if_clicked<T: Component>(
 
 fn press_draw_card_system(
     mut commands: Commands,
-    mut query: Query<(&mut Deck, &mut Hand), With<Player>>,
+    mut query: Query<(&mut Deck, &Hand, Entity), With<Player>>,
     mut player_state: ResMut<State<PlayerState>>,
     asset_server: Res<AssetServer>,
 ) {
-    let (mut deck, mut hand) = query.single_mut();
+    let (mut deck, Hand(hand), player) = query.single_mut();
 
     if let Option::Some(card) = deck.cards.pop() {
         let rat = asset_server.load("textures/rat.png");
@@ -285,7 +290,10 @@ fn press_draw_card_system(
             ..Default::default()
         });
 
-        hand.0.push(card);
+        let mut next = hand.clone();
+        next.push(card);
+        commands.entity(player).insert(Hand(next));
+
         deck.draws = deck.draws - 1;
     }
 
@@ -325,11 +333,11 @@ fn main() {
         .add_plugin(CustomUiPlugin)
         .add_startup_system(setup)
         .add_system(update_player_state)
+        .add_system(update_hand_positions)
         .add_system_set(
             SystemSet::on_update(PlayerState::Draw)
                 .with_run_criteria(run_if_clicked::<DrawCardButton>)
-                .with_system(press_draw_card_system.label("press"))
-                .with_system(update_hand_positions.after("press")),
+                .with_system(press_draw_card_system),
         )
         .add_system_set(
             SystemSet::on_update(PlayerState::Play)
