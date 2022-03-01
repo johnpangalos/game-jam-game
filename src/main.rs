@@ -222,20 +222,16 @@ fn press_end_round_system(
 
 fn update_hand_positions(
     mut commands: Commands,
-    query: Query<&Hand, (Changed<Hand>, With<Player>)>,
     style_query: Query<&Style>,
+    query: Query<&Hand, With<Player>>,
 ) {
-    if query.is_empty() {
-        return;
-    }
-
     let Hand(hand) = query.single();
 
     let gap = 2.0;
     let offset = hand.len() as f32 / 2.0 * gap;
 
     for (i, e) in hand.iter().enumerate() {
-        let style = style_query.get(*e).expect("Should exist");
+        let style = style_query.get(*e).expect("Style should exist");
         commands.entity(*e).insert(Animator::new(Tween::new(
             EaseFunction::QuinticInOut,
             TweeningType::Once,
@@ -252,50 +248,52 @@ fn update_hand_positions(
     }
 }
 
+fn run_if_clicked<T: Component>(
+    interaction_query: Query<&Interaction, (Changed<Interaction>, With<T>)>,
+) -> ShouldRun {
+    for interaction in interaction_query.iter() {
+        if let Interaction::Clicked = *interaction {
+            return ShouldRun::Yes;
+        }
+    }
+
+    ShouldRun::No
+}
+
 fn press_draw_card_system(
     mut commands: Commands,
-    mut interaction_query: Query<
-        &Interaction,
-        (Changed<Interaction>, With<Children>, With<DrawCardButton>),
-    >,
-    mut query: Query<(&mut Deck, &Hand, Entity), With<Player>>,
+    mut query: Query<(&mut Deck, &mut Hand), With<Player>>,
     mut player_state: ResMut<State<PlayerState>>,
     asset_server: Res<AssetServer>,
 ) {
-    let (mut deck, hand, e) = query.single_mut();
-    for interaction in interaction_query.iter_mut() {
-        if let Interaction::Clicked = *interaction {
-            if let Option::Some(card) = deck.cards.pop() {
-                let rat = asset_server.load("textures/rat.png");
-                commands.entity(card).insert_bundle(ImageBundle {
-                    image: UiImage(rat),
-                    style: Style {
-                        size: Size::new(Val::Px(150.0), Val::Px(200.0)),
-                        position: Rect {
-                            right: Val::Percent(5.0),
-                            bottom: Val::Percent(5.0),
-                            ..Default::default()
-                        },
-                        position_type: PositionType::Absolute,
-                        ..Default::default()
-                    },
+    let (mut deck, mut hand) = query.single_mut();
+
+    if let Option::Some(card) = deck.cards.pop() {
+        let rat = asset_server.load("textures/rat.png");
+        commands.entity(card).insert_bundle(ImageBundle {
+            image: UiImage(rat),
+            style: Style {
+                size: Size::new(Val::Px(150.0), Val::Px(200.0)),
+                position: Rect {
+                    right: Val::Percent(5.0),
+                    bottom: Val::Percent(5.0),
                     ..Default::default()
-                });
-                let mut next = hand.0.clone();
-                next.push(card);
-                commands.entity(e).insert(Hand(next));
+                },
+                position_type: PositionType::Absolute,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
 
-                deck.draws = deck.draws - 1;
-            }
+        hand.0.push(card);
+        deck.draws = deck.draws - 1;
+    }
 
-            if deck.draws <= 0 {
-                deck.draws = 1;
-                player_state
-                    .set(PlayerState::Play)
-                    .expect("This should work");
-                return;
-            }
-        }
+    if deck.draws <= 0 {
+        deck.draws = 1;
+        player_state
+            .set(PlayerState::Play)
+            .expect("This should work");
     }
 }
 
@@ -327,9 +325,17 @@ fn main() {
         .add_plugin(CustomUiPlugin)
         .add_startup_system(setup)
         .add_system(update_player_state)
-        .add_system(update_hand_positions)
-        .add_system_set(SystemSet::on_update(PlayerState::Draw).with_system(press_draw_card_system))
-        .add_system_set(SystemSet::on_update(PlayerState::Play).with_system(press_end_round_system))
+        .add_system_set(
+            SystemSet::on_update(PlayerState::Draw)
+                .with_run_criteria(run_if_clicked::<DrawCardButton>)
+                .with_system(press_draw_card_system.label("press"))
+                .with_system(update_hand_positions.after("press")),
+        )
+        .add_system_set(
+            SystemSet::on_update(PlayerState::Play)
+                .with_run_criteria(run_if_clicked::<EndRoundButton>)
+                .with_system(press_end_round_system),
+        )
         .add_system_set(
             SystemSet::on_exit(PlayerState::Play)
                 .with_system(run_cards.label("run_cards"))
