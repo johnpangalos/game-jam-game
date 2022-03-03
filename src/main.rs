@@ -324,6 +324,7 @@ fn hand_system(
 
     let radius = 2000.0;
     let height = 80.0;
+    let card_tilt = 0.1;
 
     for (i, e) in hand.iter().enumerate() {
         let (transform, mut visibility) = cards_query.get_mut(*e).expect("Transform should exist");
@@ -334,10 +335,15 @@ fn hand_system(
 
         let y = -radius + a.sin() * radius;
 
+        let offset_a = PI / 2.0 - a;
+
         commands.entity(*e).insert(transform.ease_to(
             Transform {
                 translation: Vec3::new(-x, y + height, 0.0) + hand_origin.translation,
-                rotation: Quat::from_rotation_z(PI / 2.0 - a),
+                rotation: Quat::from_rotation_z(match offset_a {
+                    x if x < 0.001 && x > -0.001 => 0.0,
+                    _ => offset_a + offset_a.signum() * card_tilt,
+                }),
                 ..Default::default()
             },
             EaseFunction::QuadraticIn,
