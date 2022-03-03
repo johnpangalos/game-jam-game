@@ -81,7 +81,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         let id = commands
             .spawn_bundle(SpriteBundle {
                 sprite: Sprite {
-                    custom_size: Option::Some(Vec2::new(112.5, 150.0)),
+                    custom_size: Option::Some(Vec2::new(225.0, 300.0)),
                     ..Default::default()
                 },
                 visibility: Visibility { is_visible: false },
@@ -312,15 +312,15 @@ fn hand_system(
 
     let Hand(hand) = query.single();
 
-    let card_space = PI / 12.0;
+    let card_space = PI / 10.0;
     let offset = card_space * hand.len() as f32 - 0.2 * hand.len() as f32;
     let spacing = match hand.len() {
         0..=1 => 0.0,
         _ => offset / (hand.len() - 1) as f32,
     };
 
-    let radius = 100.0 + 50.0 * hand.len() as f32;
-    let height = 140.0;
+    let radius = 500.0 + 50.0 * hand.len() as f32;
+    let height = 80.0;
 
     for (i, e) in hand.iter().enumerate() {
         let (transform, mut visibility) = cards_query.get_mut(*e).expect("Transform should exist");
