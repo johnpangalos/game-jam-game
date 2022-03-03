@@ -312,14 +312,17 @@ fn hand_system(
 
     let Hand(hand) = query.single();
 
-    let card_space = PI / 10.0;
-    let offset = card_space * hand.len() as f32 - 0.2 * hand.len() as f32;
+    let card_space = PI / 13.0;
+    let offset = match hand.len() {
+        0..=1 => 0.0,
+        _ => card_space * hand.len() as f32 - 0.2 * hand.len() as f32,
+    };
     let spacing = match hand.len() {
         0..=1 => 0.0,
         _ => offset / (hand.len() - 1) as f32,
     };
 
-    let radius = 500.0 + 50.0 * hand.len() as f32;
+    let radius = 2000.0;
     let height = 80.0;
 
     for (i, e) in hand.iter().enumerate() {
